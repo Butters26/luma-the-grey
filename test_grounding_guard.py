@@ -114,6 +114,74 @@ class GroundingGuardTests(unittest.TestCase):
         self.assertEqual(result["confidence"], 0.5)
         self.assertIsNone(result["output"])
 
+    def _confidence_case(self, supplied, records=None, **extra):
+        guard = _load_reasoning_copy().PropositionGroundingGuard()
+        records = records if records is not None else [
+            _evidence("support", "supports"),
+            _evidence("contradiction", "contradicts"),
+        ]
+        proposition = {
+            "content": "Claim.",
+            "provenance_ids": [record["id"] for record in records],
+            "entities": [],
+            "confidence": supplied,
+        }
+        proposition.update(extra)
+        return guard.evaluate_proposition(proposition, records)
+
+    def test_forged_confidence_is_rejected_even_when_not_a_banned_number(self):
+        for forged in (0.51, 0.99, 1.0, 0.0):
+            result = self._confidence_case(forged)
+            self.assertEqual(result["status"], "REJECTED", forged)
+            self.assertEqual(result["reason"], "confidence_mismatch", forged)
+            self.assertEqual(result["confidence"], 0.5)
+            self.assertIsNone(result["output"])
+
+    def test_honest_supplied_confidence_is_accepted_including_a_tie(self):
+        result = self._confidence_case(0.5)
+        self.assertEqual(result["status"], "NEUTRAL_DEADLOCK")
+        self.assertEqual(result["confidence"], 0.5)
+
+        records = [
+            _evidence("a", "supports"),
+            _evidence("b", "supports"),
+            _evidence("c", "supports"),
+            _evidence("d", "contradicts"),
+        ]
+        result = self._confidence_case(0.75, records)
+        self.assertEqual(result["status"], "GROUNDED")
+        self.assertEqual(result["confidence"], 0.75)
+
+    def test_omitted_or_none_confidence_is_still_computed(self):
+        result = self._confidence_case(None)
+        self.assertEqual(result["status"], "NEUTRAL_DEADLOCK")
+        self.assertEqual(result["confidence"], 0.5)
+
+    def test_non_numeric_or_non_finite_supplied_confidence_is_rejected(self):
+        for bad in ("0.5", True, float("nan"), float("inf"), [0.5]):
+            result = self._confidence_case(bad)
+            self.assertEqual(result["status"], "REJECTED", repr(bad))
+            self.assertEqual(result["reason"], "invalid_supplied_confidence", repr(bad))
+
+    def test_forged_counts_and_fake_ids_are_rejected(self):
+        guard = _load_reasoning_copy().PropositionGroundingGuard()
+
+        result = guard.evaluate_proposition(
+            {
+                "content": "Claim.",
+                "provenance_ids": ["does-not-exist"],
+                "entities": [],
+                "confidence": 1.0,
+                "supporting_count": 50,
+                "contradicting_count": 0,
+            },
+            [],
+        )
+
+        self.assertEqual(result["status"], "REJECTED")
+        self.assertEqual(result["reason"], "invalid_or_missing_provenance")
+        self.assertIsNone(result["output"])
+
     def test_supported_proposition_cannot_add_unsupported_entities(self):
         guard = _load_reasoning_copy().PropositionGroundingGuard()
 

@@ -16,6 +16,7 @@ This is as close to consciousness as symbolic AI can get.
 """
 
 import json
+import math
 import os
 import time
 # Removed 'import re' - no hardcoded pattern matching in reasoning system
@@ -267,6 +268,25 @@ class PropositionGroundingGuard:
             }
 
         confidence = len(supporting) / total_evidence
+        if "confidence" in proposition and proposition["confidence"] is not None:
+            supplied = proposition["confidence"]
+            if (
+                isinstance(supplied, bool)
+                or not isinstance(supplied, (int, float))
+                or not math.isfinite(supplied)
+            ):
+                return {
+                    "status": "REJECTED",
+                    "reason": "invalid_supplied_confidence",
+                    "output": None,
+                }
+            if abs(supplied - confidence) > 1e-6:
+                return {
+                    "status": "REJECTED",
+                    "reason": "confidence_mismatch",
+                    "confidence": confidence,
+                    "output": None,
+                }
         if confidence < self.confidence_floor:
             return {
                 "status": "NEUTRAL_DEADLOCK",

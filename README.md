@@ -4,7 +4,9 @@ These files are isolated working copies. The live Mercy/Monday modules are not
 modified or routed through this directory.
 
 - `reasoning.py` contains a provenance/evidence guard API for callers to run
-  before realization.
+  before realization. Confidence is always computed from the cited records'
+  support ratio; a caller-supplied `confidence` is cross-checked against it and
+  the proposition is rejected on any mismatch.
 - `notus.py` is an isolated copy of the durable-memory module. Its SQLite
   adapter returns persistent memory IDs on store and recall.
 - `test_grounding_guard.py` runs an isolated SQLite Notus → reasoning guard →
